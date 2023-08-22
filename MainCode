@@ -1,9 +1,16 @@
 Sub RunCode()
 '
 ' RunCode Macro
-'
-'This is the CODE that organizes all the transactions (over the period of the entered date range) for each user id (or household) and identifies any 
-'inconsistencies in bill provider fees, and flags them.
+
+'This is the Code that organizes all the transactions (over the period of the entered date range) for each 
+'user id (or household), and identifies any inconsistencies in bill provider fees, and flags them.
+
+'Flagged cases:
+'1. Provider charges that appear less often than they are supposed to. (day range varies from provider to provider - code refers to a key with the specific cases)
+'2. Provider charges that appear more often than they are supposed to. (day range varies from provider to provider - code refers to a key with the specific cases)
+'3. Charges from a certain provider that don't appear for a while (e.g., after 2 or more months)
+'4. Bill charges that are out of range from the referred excel sheet with the bill key.
+'5. Fixed Payment charges that changes from the previous payment to current payment (changes by 1 cent or more).
 
 'storebeg & storeend are string variables that store the start and end date
 Dim storebeg As String

@@ -1,0 +1,1076 @@
+Sub RunCode()
+'
+' RunCode Macro
+'
+'This is the CODE that organizes all the transactions (over the period of the entered date range) for each user id (or household) and identifies any 
+'inconsistencies in bill provider fees, and flags them.
+
+'storebeg & storeend are string variables that store the start and end date
+Dim storebeg As String
+Dim storeend As String
+
+'Enter the Start and End Date [Ex: 05/23/2023]
+storebeg = InputBox("What is the start date?", "Enter Start Date")
+storeend = InputBox("What is the end date?", "Enter End Date")
+
+'arrB is a String Array that stores the split version of the entered start date
+Dim arrB() As String
+'arrE is a String Array that stores the split version of the entered end date
+Dim arrE() As String
+
+    arrB = Split(storebeg, "/")
+    arrE = Split(storeend, "/")
+    'Ex: Start date (storebeg is entered as 05/28/2023)
+    'Once Split:
+    'arrB(0) = "05"
+    'arrB(1) = "28"
+    'arr(2) = "2023"
+' ...
+'rw1 is a variable that goes down the rows (starts at 2 b/c row 1 is the headers of each column
+Dim rw1 As Long
+rw1 = 2
+    
+Do While CStr(Cells(rw1, 3).Value) <> “”
+    'To correct no catgeory and phone issues
+    If CStr(Cells(rw1, 3).Value) = "ACH SETTLEMENT OFFSET" Or CStr(Cells(rw1, 3).Value) = "TOTAL RELATIONSHIP SERVICE FEE WAIVE" Then
+        Cells(rw1, 4).Value = "Bank & Service Fees"
+    ElseIf CStr(Cells(rw1, 4).Value) = "Phone" Then
+        Cells(rw1, 4).Value = "Phone/Cable"
+    End If
+    '...
+    rw1 = rw1 + 1
+Loop
+
+    rw1 = 2
+    Dim filt() As String
+
+'household var is a reference index variable.
+Dim household As Long
+household = 1
+
+Dim monthcount1 As Long
+monthcount1 = 1
+Dim storemonth As Long
+storemonth = 0
+
+'Collection to track the end month number (assigned from column 20) for each household
+'Used later to compare in case a certain provider doesn't show up in longer than expected, or never again
+Dim endmonth As Collection
+Set endmonth = New Collection
+
+'Collection to track to day number of the month for the last transaction of a household
+'Used later to compare in case a certain provider doesn't show up in longer than expected, or never again
+Dim endday As Collection
+Set endday = New Collection
+
+
+'Month count to add to column 20 - Letter T Column - Ex:
+Do While Cells(rw1, 1).Value <> “”
+    If CStr(Cells(rw1, 1).Value) <> CStr(Cells(household, 1).Value) Then
+        household = rw1
+        monthcount1 = 1
+        
+        'The next 6 lines of code are for adding in the end month (assigned number) and end day for each household - into a collection
+        'we do household <> 1 as we don't want to split the column titles as household variable is the row number and row 1 has the column names
+        If rw1 <> 2 Then
+            endmonth.Add Cells(rw1 - 1, 20).Value
+            filt = Split(CStr(Cells(rw1 - 1, 2).Value), "/")
+            endday.Add CInt(filt(1))
+            Erase filt()
+        End If
+        
+        filt = Split(CStr(Cells(rw1, 2).Value), "/")
+        Cells(rw1, 20).Value = monthcount1
+        storemonth = CInt(filt(0))
+        Erase filt()
+    Else
+        filt = Split(CStr(Cells(rw1, 2).Value), "/")
+        If CInt(filt(0)) <> storemonth Then
+            storemonth = CInt(filt(0))
+            monthcount1 = monthcount1 + 1
+        End If
+        Cells(rw1, 20).Value = monthcount1
+        Erase filt()
+    End If
+    Erase filt()
+    rw1 = rw1 + 1
+Loop
+'''''
+
+'VARIABLES for THE MAIN BODY OF CODE'
+
+'comonth is a variable that adds 1 each time a the data goes to the next month
+Dim comonth As Long
+comonth = 0
+'cc1 is a variable that goes down the rows
+Dim cc1 As Long
+cc1 = 2
+'countnum is a collection that sotres the number of times each provider shows up for a given household
+Dim countnum As Collection
+Set countnum = New Collection
+'storestore is a collection that stores the location of each provider charge (ex: "A2:A2")
+Dim storestore As Collection
+Set storestore = New Collection
+'intx is a reference variable for the row number
+Dim intx As Long
+intx = 2
+'rw is a vriable that goes down the rows
+Dim rw As Long
+rw = 2
+'str is variable for the range highlights
+Dim str As String
+str = "C" + CStr(rw) + ":C" + CStr(rw)
+'wordz is a collection that stores the provider description for a given household
+Dim wordz As Collection
+Set wordz = New Collection
+'valz is a collection that stores the amount of each bill payment, by individual provider
+Dim valz As Collection
+Set valz = New Collection
+'mnu1 and mnu2 are the exact same in that they store the month number of each payment, by provider [store column 20]
+Dim mnu1 As Collection
+Set mnu1 = New Collection
+Dim mnu2 As Collection
+Set mnu2 = New Collection
+'icount is a variable that goes down the rows
+Dim icount As Long
+icount = 1
+'icount2 is a variable that goes down the rows
+Dim icount2 As Long
+icount2 = 1
+'Store the lastest provider dates for the blue highlights
+Dim addz() As String
+'each date is split into the addz array by the "/" and the month will go into date2, the day into date3,
+'and the year into date4
+Dim date2 As Collection
+Set date2 = New Collection
+Dim date3 As Collection
+Set date3 = New Collection
+Dim date4 As Collection
+Set date4 = New Collection
+'med is just a storage variable to help
+Dim med As Long
+med = 0
+'stor, sfirst, and amt are variable to be used for range highlights
+Dim stor As String
+stor = "B" + CStr(rw) + ":B" + CStr(rw)
+Dim sfirst As String
+sfirst = "A" + CStr(rw) + ":A" + CStr(rw)
+Dim amt1 As String
+amt1 = "F" + CStr(rw) + ":F" + CStr(rw)
+'crw is a reference variable to be used as a row number
+Dim crw As Long
+crw = 0
+'stores the previous month (sm), day (sd), and year (sy) - to later compare to the new ones
+Dim sm As String
+Dim sd As String
+Dim sy As String
+
+'Variable to store previous assigned month number - used to compare for quarterly, semi-annual, or annual bill providers
+Dim mnu2sm As Long
+
+'Collection that stores the frequency of each provider by household.
+Dim stfreq As Collection
+Set stfreq = New Collection
+
+'Collection that stores the # expected days between difference provider appearances by household.
+Dim stday As Collection
+Set stday = New Collection
+
+'Variable used to cycle through the endmonth and endday collections (as those only have the last assigned month and day for each household.
+Dim houseid As Long
+houseid = 1
+
+'...........
+'First Do While Loop is till the column 1 value is "SS" - Nothing should be put if the househld ID is "SS"
+Do While CStr(Cells(rw, 1).Value) <> "SS"
+    'Second Do While Loop is till household id changes - the reference var (intx); rw adds 1 after each cycle
+    'Once hosuehold id changes, we set intx = rw as we make the current household id the new reference.
+    Do While Cells(rw, 1).Value = Cells(intx, 1)
+        'This IF-Statement is for the first provider description of each household
+        If wordz.Count = 0 Then
+            sfirst = "A" + CStr(rw) + ":A" + CStr(rw)
+            '
+            wordz.Add Cells(rw, 3).Value
+            crw = rw
+            valz.Add crw
+            '...
+            '...
+            countnum.Add CInt(1)
+            storestore.Add "B" + CStr(rw) + ":B" + CStr(rw)
+            Range(sfirst).Font.Bold = True
+            Range(sfirst).Font.Underline = True
+            mnu1.Add Cells(rw, 20).Value
+            mnu2.Add Cells(rw, 20).Value
+            'Adding the month# and date# of each most recent provider description
+            addz = Split(CStr(Cells(rw, 2)), "/")
+            date2.Add addz(0)
+            date3.Add addz(1)
+            date4.Add addz(2)
+            Erase addz()
+            
+            'If the first provider of a given household, add the frequencies (column 15, or Column o) and the expected days (column 16 or p)
+            stfreq.Add Cells(rw, 15).Value
+            stday.Add Cells(rw, 16).Value
+            
+            'Highlight red
+            Range(str).Interior.Color = RGB(255, 0, 0)
+            
+            'Add to description
+            Cells(rw, 8).Value = "New Provider"
+            '..............
+        Else
+            'If it's not the first provider description for the given household, then we go through the wordz
+            'collection to check for any matches. (if a certain provider for a certain household appears
+            'more than once.
+            Do While icount <= wordz.Count
+                If Cells(rw, 3).Value = wordz(icount) Then
+                    'Condition for collections
+                    med = CInt(countnum(icount)) + 1
+                    If icount = wordz.Count Then
+                        countnum.Remove (icount)
+                        countnum.Add med
+                    Else
+                        countnum.Remove (icount)
+                        countnum.Add med, Before:=icount
+                    End If
+                    '...............................
+                    'Splitting the current date into three different slots, separated by the "/"
+                    addz = Split(CStr(Cells(rw, 2)), "/")
+                    'sm, sd, sy are for storing to old date values before adding the new ones to the
+                    'date 2, 3, and 4 collections
+                    
+                    sm = date2(icount)
+                    sd = date3(icount)
+                    sy = date4(icount)
+                    
+                    mnu2sm = mnu2(icount)
+                    'The if-else statement is the process of removing and adding in a new value into a collection
+                    'The if is in case the current icount value is at the end of the collection
+                    'The else is if we need to remove and add a new value somewhere between the beginning and end
+                    'of the collection
+                    If icount = date2.Count Then
+                        date2.Remove (icount)
+                        date3.Remove (icount)
+                        date4.Remove (icount)
+                        date2.Add addz(0)
+                        date3.Add addz(1)
+                        date4.Add addz(2)
+                    Else
+                        date2.Remove (icount)
+                        date3.Remove (icount)
+                        date4.Remove (icount)
+                        date2.Add addz(0), Before:=icount
+                        date3.Add addz(1), Before:=icount
+                        date4.Add addz(2), Before:=icount
+                    End If
+                    'Always erase addz to make room for the next date
+                    Erase addz()
+                    
+                    'Extra red highlight if something doesn't appear for over a two months defending on frequency
+                        'Simple checks for Quarterly, Semi-Annually, and Annually Frequencies
+                        If CStr(stfreq(icount)) = "Quarterly" Then
+                            If Cells(rw, 20).Value - mnu2sm = 6 And CInt(date3(icount)) - CInt(sd) >= 0 Then
+                                str = "C" + CStr(rw) + ":C" + CStr(rw)
+                                'highlights cell red
+                                Range(str).Interior.Color = RGB(255, 0, 0)
+                                Cells(rw, 8).Value = "First Appearance in over a Quarter"
+                            ElseIf Cells(rw, 20).Value - mnu2sm > 6 Then
+                                str = "C" + CStr(rw) + ":C" + CStr(rw)
+                                'highlights cell red
+                                Range(str).Interior.Color = RGB(255, 0, 0)
+                                Cells(rw, 8).Value = "First Appearance in over a Quarter"
+                            End If
+                            
+                        ElseIf CStr(stfreq(icount)) = "Semi-Annually" Then
+                            If Cells(rw, 20).Value - mnu2sm = 8 And CInt(date3(icount)) - CInt(sd) >= 0 Then
+                                str = "C" + CStr(rw) + ":C" + CStr(rw)
+                                'highlights cell red
+                                Range(str).Interior.Color = RGB(255, 0, 0)
+                                Cells(rw, 8).Value = "First Appearance in over a half-year"
+                            ElseIf Cells(rw, 20).Value - mnu2sm > 8 Then
+                                str = "C" + CStr(rw) + ":C" + CStr(rw)
+                                'highlights cell red
+                                Range(str).Interior.Color = RGB(255, 0, 0)
+                                Cells(rw, 8).Value = "First Appearance in over a half-year"
+                            End If
+                            
+                        ElseIf CStr(stfreq(icount)) = "Annually" Then
+                            If Cells(rw, 20).Value - mnu2sm = 14 And CInt(date3(icount)) - CInt(sd) >= 0 Then
+                                str = "C" + CStr(rw) + ":C" + CStr(rw)
+                                'highlights cell red
+                                Range(str).Interior.Color = RGB(255, 0, 0)
+                                Cells(rw, 8).Value = "First Appearance in over a Year"
+                            ElseIf Cells(rw, 20).Value - mnu2sm > 14 Then
+                                str = "C" + CStr(rw) + ":C" + CStr(rw)
+                                'highlights cell red
+                                Range(str).Interior.Color = RGB(255, 0, 0)
+                                Cells(rw, 8).Value = "First Appearance in over a Year"
+                            End If
+                        'the rest of the conditions are for monthly frequencies
+                        'First checks if there's at least a 2 month, 0 or more days difference between
+                        'the current and previous occurance of a provider for a household
+                        
+                        ElseIf Cells(rw, 20).Value - mnu2(icount) = 2 And CInt(date3(icount)) - CInt(sd) >= 0 Then
+                            str = "C" + CStr(rw) + ":C" + CStr(rw)
+                            'highlights cell red
+                            Range(str).Interior.Color = RGB(255, 0, 0)
+                            Cells(rw, 8).Value = "First Appearance in a While"
+                        'If not, the first condition, then checks if the difference between the current and
+                        'previous occurance is greater than 2 months
+                        ElseIf Cells(rw, 20).Value - mnu2(icount) > 2 Then
+                            str = "C" + CStr(rw) + ":C" + CStr(rw)
+                            'highlights cell red
+                            Range(str).Interior.Color = RGB(255, 0, 0)
+                            Cells(rw, 8).Value = "First Appearance in a While"
+                        End If
+                    '.............
+                    
+                        If icount = mnu2.Count Then
+                            med = Cells(rw, 20).Value
+                            mnu2.Remove (icount)
+                            mnu2.Add med
+                        Else
+                            med = Cells(rw, 20).Value
+                            mnu2.Remove (icount)
+                            mnu2.Add med, Before:=icount
+                        End If
+                    
+                    '...................
+                    'Test for certain conditions that allow for green or disallow for blue:
+                    'Condition for if the previous occurance was on December of the previous year, and if
+                    'the current occurance is on January of the current year.
+                    
+                    
+                    If CStr(stfreq(icount)) = "Monthly" Then
+                    
+                    
+                    
+                        If CInt(date2(icount)) = 1 And CInt(sm) = 12 And CInt(date4(icount)) - CInt(sy) = 1 Then
+                        'If the difference between the current day and the previous day number is less than -3, then
+                        'you would highlight the specific cell green (regardless of month number)
+                        'ex: date3(icount) is 24 and sd is 28; 24 - 28 = -4 (highlighted green)
+                        'because that means it appeared more than once within a month's span.
+                            If CInt(date3(icount)) - CInt(sd) < (stday(icount) - 30) - 3 Then
+                                Range(storestore(icount)).Interior.Color = RGB(144, 238, 144)
+                                stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                                Range(stor).Interior.Color = RGB(144, 238, 144)
+                            'If a current provider transaction is one month before the end month, and
+                            'the end date day is greater than the current day by more than 3, then you would
+                            'highlight the cell blue.
+                                If CInt(arrE(0)) - CInt(date2(icount)) = 1 And CInt(arrE(1)) - CInt(date3(icount)) > (stday(icount) - 30) + 3 Then
+                                    Range(stor).Interior.Color = RGB(173, 216, 230)
+                                End If
+                        'If the difference between the current day and the previous day number is greater than 27,
+                        'then you would highlight the specific cell blue
+                            ElseIf CInt(date3(icount)) - CInt(sd) > (stday(icount) - 30) + 3 Then
+                                Range(storestore(icount)).Interior.Color = RGB(173, 216, 230)
+                                stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                            End If
+                    'Condition for if the previous occurance was on November of the previous year, and if
+                    'the current occurance is on January of the current year.
+                        ElseIf CInt(date2(icount)) = 1 And CInt(sm) = 11 And CInt(date4(icount)) - CInt(sy) = 1 Then
+                            If CInt(date3(icount)) - CInt(sd) <= (stday(icount) - 30) - 27 Then
+                                Range(storestore(icount)).Interior.Color = RGB(255, 255, 255)
+                                stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                            ElseIf CInt(date3(icount)) - CInt(sd) > (stday(icount) - 30) - 27 Then
+                                Range(storestore(icount)).Interior.Color = RGB(173, 216, 230)
+                                stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                            End If
+                    'Condition for the year switch if the current occurance was on Feb of the current year,
+                    'and the previous occurance was on December of the previous year.
+                        ElseIf CInt(date2(icount)) = 2 And CInt(sm) = 12 And CInt(date4(icount)) - CInt(sy) = 1 Then
+                            If CInt(date3(icount)) - CInt(sd) <= (stday(icount) - 30) - 27 Then
+                                Range(storestore(icount)).Interior.Color = RGB(255, 255, 255)
+                                stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                            ElseIf CInt(date3(icount)) - CInt(sd) > (stday(icount) - 30) - 27 Then
+                                Range(storestore(icount)).Interior.Color = RGB(173, 216, 230)
+                                stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                            End If
+                    'CONDITION *** FOR *** IF A current provider charge appears a year or more after the previous one
+                    'Basic 1-year difference conditions covered above
+                        ElseIf CInt(date4(icount)) - CInt(sy) >= 1 Then
+                            Range(storestore(icount)).Interior.Color = RGB(173, 216, 230)
+                    'Condition for if a provider charge occurs more than once within the same month.
+                    'Will highlight green if it's the case
+                        ElseIf CInt(date2(icount)) = CInt(sm) And CInt(date3(icount)) - CInt(sd) < (stday(icount) - 30) + 28 And CInt(date4(icount)) = CInt(sy) Then
+                            Range(storestore(icount)).Interior.Color = RGB(144, 238, 144)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                            Range(stor).Interior.Color = RGB(144, 238, 144)
+                            If CInt(arrE(0)) - CInt(date2(icount)) = 1 And CInt(arrE(1)) - CInt(date3(icount)) > (stday(icount) - 30) + 3 And CInt(arrE(2)) = CInt(date4(icount)) Then
+                                Range(stor).Interior.Color = RGB(173, 216, 230)
+                        'August 1st end range ex.
+                            ElseIf CInt(arrE(0)) - CInt(date2(icount)) = 2 And CInt(arrE(1)) - CInt(date3(icount)) > (stday(icount) - 30) - 27 And CInt(arrE(2)) = CInt(date4(icount)) Then
+                                Range(stor).Interior.Color = RGB(173, 216, 230)
+                            End If
+                    'If the same provider charge occures twice within the same month, and they are both separated
+                    'by 28 or more days, then no highlight is needed.
+                        ElseIf CInt(date2(icount)) = CInt(sm) And CInt(date3(icount)) - CInt(sd) >= (stday(icount) - 30) + 28 And CInt(date4(icount)) = CInt(sy) Then
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                    'If the current provider charge happened the month after the previous, but if the difference
+                    'in the days is < -3 (Ex: New: Sept 24; Prev: Aug 28 [24 - 28 = -4]), then it would
+                    'highlight green
+                        ElseIf CInt(date2(icount)) - CInt(sm) = 1 And CInt(date3(icount)) - CInt(sd) < (stday(icount) - 30) - 3 And CInt(date4(icount)) = CInt(sy) Then
+                            Range(storestore(icount)).Interior.Color = RGB(144, 238, 144)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                            Range(stor).Interior.Color = RGB(144, 238, 144)
+                            If CInt(arrE(0)) - CInt(date2(icount)) = 1 And CInt(arrE(1)) - CInt(date3(icount)) > (stday(icount) - 30) + 3 And CInt(arrE(2)) = CInt(date4(icount)) Then
+                                Range(stor).Interior.Color = RGB(173, 216, 230)
+                        'August 1st end range example.
+                            ElseIf CInt(arrE(0)) - CInt(date2(icount)) = 2 And CInt(arrE(1)) - CInt(date3(icount)) > (stday(icount) - 30) - 27 And CInt(arrE(2)) = CInt(date4(icount)) Then
+                                Range(stor).Interior.Color = RGB(173, 216, 230)
+                            End If
+                    'If the current provider charge happened the month after the previous, but if the difference
+                    'in the days is > 3 (Ex: New: Sept 31; Prev: Aug 27 [31 - 27 = 4]), then it would
+                    'highlight blue
+                        ElseIf CInt(date2(icount)) - CInt(sm) = 1 And CInt(date3(icount)) - CInt(sd) > (stday(icount) - 30) + 3 And CInt(date4(icount)) = CInt(sy) Then
+                            Range(storestore(icount)).Interior.Color = RGB(173, 216, 230)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                    'If the current provider charge happened two months after the previous, but if the difference
+                    'in the days is <= -27 (Ex: New: Oct 1; Prev: Aug 31 [1 - 31 = -30]), then it would
+                    'highlight white - or no highlight
+                        ElseIf CInt(date2(icount)) - CInt(sm) = 2 And CInt(date3(icount)) - CInt(sd) <= (stday(icount) - 30) - 27 And CInt(date4(icount)) = CInt(sy) Then
+                            Range(storestore(icount)).Interior.Color = RGB(255, 255, 255)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                    'If the current provider charge happened two months after the previous, but if the difference
+                    'in the days is > -27 (Ex: New: Oct 7; Prev: Aug 31 [7 - 31 = -24]), then it would
+                    'highlight blue
+                        ElseIf CInt(date2(icount)) - CInt(sm) = 2 And CInt(date3(icount)) - CInt(sd) > (stday(icount) - 30) - 27 And CInt(date4(icount)) = CInt(sy) Then
+                            Range(storestore(icount)).Interior.Color = RGB(173, 216, 230)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                        ElseIf CInt(date2(icount)) - CInt(sm) > 2 Then
+                            Range(storestore(icount)).Interior.Color = RGB(173, 216, 230)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                        'Any other case, it would just highlight white as we covered all the neccesary conditions above
+                        Else
+                            Range(storestore(icount)).Interior.Color = RGB(255, 255, 255)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                        End If
+                    
+                    'Same type of checks for the Quarterly, Semi-Annual, and Annual --- in terms of blue n' green highlights
+                    ElseIf CStr(stfreq(icount)) = "Quarterly" Then
+                        If Cells(rw, 20).Value - mnu2sm = 4 And CInt(date3(icount)) - CInt(sd) > 4 Then
+                            Range(storestore(icount)).Interior.Color = RGB(173, 216, 230)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                        'Ex: Jan 27th and May 1st
+                        ElseIf Cells(rw, 20).Value - mnu2sm = 5 And CInt(date3(icount)) - CInt(sd) > -26 Then
+                            Range(storestore(icount)).Interior.Color = RGB(173, 216, 230)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                        ElseIf Cells(rw, 20).Value - mnu2sm > 5 Then
+                            Range(storestore(icount)).Interior.Color = RGB(173, 216, 230)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                        ElseIf Cells(rw, 20).Value - mnu2sm = 4 And CInt(date3(icount)) - CInt(sd) < -4 Then
+                            Range(storestore(icount)).Interior.Color = RGB(144, 238, 144)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                            Range(stor).Interior.Color = RGB(144, 238, 144)
+                        'Ex: Jan 1st and April 27th
+                        ElseIf Cells(rw, 20).Value - mnu2sm = 3 And CInt(date3(icount)) - CInt(sd) < 26 Then
+                            Range(storestore(icount)).Interior.Color = RGB(144, 238, 144)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                            Range(stor).Interior.Color = RGB(144, 238, 144)
+                        ElseIf Cells(rw, 20).Value - mnu2sm < 3 Then
+                            Range(storestore(icount)).Interior.Color = RGB(144, 238, 144)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                            Range(stor).Interior.Color = RGB(144, 238, 144)
+                        End If
+                    
+                    ElseIf CStr(stfreq(icount)) = "Semi-Annually" Then
+                        If Cells(rw, 20).Value - mnu2sm = 6 And CInt(date3(icount)) - CInt(sd) > 7 Then
+                            Range(storestore(icount)).Interior.Color = RGB(173, 216, 230)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                        'Ex: Jan 27th and August 4st
+                        ElseIf Cells(rw, 20).Value - mnu2sm = 7 And CInt(date3(icount)) - CInt(sd) > -23 Then
+                            Range(storestore(icount)).Interior.Color = RGB(173, 216, 230)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                        ElseIf Cells(rw, 20).Value - mnu2sm > 7 Then
+                            Range(storestore(icount)).Interior.Color = RGB(173, 216, 230)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                        ElseIf Cells(rw, 20).Value - mnu2sm = 6 And CInt(date3(icount)) - CInt(sd) < -7 Then
+                            Range(storestore(icount)).Interior.Color = RGB(144, 238, 144)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                            Range(stor).Interior.Color = RGB(144, 238, 144)
+                        'Ex: Jan 1st and April 24th
+                        ElseIf Cells(rw, 20).Value - mnu2sm = 5 And CInt(date3(icount)) - CInt(sd) < 23 Then
+                            Range(storestore(icount)).Interior.Color = RGB(144, 238, 144)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                            Range(stor).Interior.Color = RGB(144, 238, 144)
+                        ElseIf Cells(rw, 20).Value - mnu2sm < 5 Then
+                            Range(storestore(icount)).Interior.Color = RGB(144, 238, 144)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                            Range(stor).Interior.Color = RGB(144, 238, 144)
+                        End If
+                    
+                    ElseIf CStr(stfreq(icount)) = "Anually" Then
+                        If Cells(rw, 20).Value - mnu2sm = 12 And CInt(date3(icount)) - CInt(sd) > 10 Then
+                            Range(storestore(icount)).Interior.Color = RGB(173, 216, 230)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                        'Ex: Jan 27th and August 7st
+                        ElseIf Cells(rw, 20).Value - mnu2sm = 13 And CInt(date3(icount)) - CInt(sd) > -20 Then
+                            Range(storestore(icount)).Interior.Color = RGB(173, 216, 230)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                        ElseIf Cells(rw, 20).Value - mnu2sm > 13 Then
+                            Range(storestore(icount)).Interior.Color = RGB(173, 216, 230)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                        ElseIf Cells(rw, 20).Value - mnu2sm = 12 And CInt(date3(icount)) - CInt(sd) < -10 Then
+                            Range(storestore(icount)).Interior.Color = RGB(144, 238, 144)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                            Range(stor).Interior.Color = RGB(144, 238, 144)
+                        'Ex: Jan 1st and April 21th
+                        ElseIf Cells(rw, 20).Value - mnu2sm = 11 And CInt(date3(icount)) - CInt(sd) < 20 Then
+                            Range(storestore(icount)).Interior.Color = RGB(144, 238, 144)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                            Range(stor).Interior.Color = RGB(144, 238, 144)
+                        ElseIf Cells(rw, 20).Value - mnu2sm < 11 Then
+                            Range(storestore(icount)).Interior.Color = RGB(144, 238, 144)
+                            stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                            Range(stor).Interior.Color = RGB(144, 238, 144)
+                        End If
+                    
+                    End If
+                    
+                    '..............
+                    'After checking over the conditions, then replace the new location of the current provider
+                    'into the collection storage.
+                    If icount = storestore.Count Then
+                        stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                        storestore.Remove (icount)
+                        storestore.Add stor
+                    Else
+                        stor = "B" + CStr(rw) + ":B" + CStr(rw)
+                        storestore.Remove (icount)
+                        storestore.Add stor, Before:=icount
+                    End If
+                    'Calculating the Delta or change between the current provider occurance charge
+                    'and the previous occurance charge; NOTE: valz(icount) stores the most recent row location of
+                    'a provider
+                    Cells(rw, 6).Value = -1 * (Cells(rw, 5).Value - Cells(valz(icount), 5).Value)
+                    If Cells(rw, 6) = 0 Then
+                        Cells(rw, 6) = 0
+                    'This condition is for the fixed provider charges
+                    ElseIf CStr(Cells(rw, 4).Value) = "Entertainment" Or CStr(Cells(rw, 4).Value) = "Phone/Cable" Or CStr(Cells(rw, 4).Value) = "Bank & Service Fees" Then
+                        If Cells(rw, 5).Value / Cells(valz(icount), 5).Value <= 0.99 Or Cells(rw, 5).Value / Cells(valz(icount), 5).Value >= 1.01 Then
+                            Range(amt1).Interior.Color = RGB(255, 165, 0)
+                        End If
+                    'This is for the variable provider charges (No LONGER NECCESSARY!**)
+                    'Else
+                        'If Cells(valz(icount), 5).Value = 0 Then
+                        '    Range(amt1).Interior.Color = RGB(255, 255, 0)
+                        'ElseIf Cells(rw, 5).Value / Cells(valz(icount), 5).Value <= 0.75 Or Cells(rw, 5).Value / Cells(valz(icount), 5).Value >= 1.25 Then
+                        '    Range(amt1).Interior.Color = RGB(255, 255, 0)
+                        'End If
+                    End If
+                    'Collection Condition - updates the valz(icount) or row number to the current one.
+                    If icount = valz.Count Then
+                        valz.Remove (icount)
+                        valz.Add rw
+                    Else
+                        valz.Remove (icount)
+                        valz.Add rw, Before:=icount
+                    End If
+                    '.....................
+                    icount = wordz.Count + 1
+                'If there's no match with the provider database, or if a new provider appears, then
+                'we would add it to the database (wordz collection), add the row number (valz),
+                'give it it's first occurance number (countnum), add its date points (date2, 3, and 4), and
+                'add in its assigned month number in column 20.
+                Else
+                    icount = icount + 1
+                    If icount = wordz.Count + 1 Then
+                        wordz.Add Cells(rw, 3).Value
+                        crw = rw
+                        valz.Add crw
+                        countnum.Add CInt(1) - 1
+                        storestore.Add "B" + CStr(rw) + ":B" + CStr(rw)
+                        'Adding the month# and date# of each most recent provider description
+                        addz = Split(CStr(Cells(rw, 2)), "/")
+                        date2.Add addz(0)
+                        date3.Add addz(1)
+                        date4.Add addz(2)
+                        Erase addz()
+                        '..............
+                        'Cells(rw, 20).Value = mnu
+                        mnu1.Add Cells(rw, 20).Value
+                        mnu2.Add Cells(rw, 20).Value
+                        
+                         'If a new provider, add the frequencies (column 15, or Column o) and the expected days (column 16 or p)
+                        stfreq.Add Cells(rw, 15).Value
+                        stday.Add Cells(rw, 16).Value
+                        
+                        'Highlight new provider as red
+                        Range(str).Interior.Color = RGB(255, 0, 0)
+                        Cells(rw, 8).Value = "New Provider"
+                    End If
+                End If
+            Loop
+        End If
+        '...
+            'This is a check-in after the end of a month for each household
+            If CInt(Cells(rw + 1, 20)) <> CInt(Cells(cc1, 20)) Or Cells(rw + 1, 1).Value <> Cells(intx, 1).Value Then
+                'comonth starts at zero, and adds 1 after each month change
+                comonth = comonth + 1
+                'Do While loop to check through the whole countnum colection database.
+                Do While icount2 <= countnum.Count
+                    'If frequencies are Quarterly, Semi-annually, or Anually, then it will only compare th final provider appearance to the end date
+                    'of the last overall provider of a given household
+                    If CStr(stfreq(icount2)) = "Quarterly" Then
+                        If Cells(rw + 1, 1).Value <> Cells(intx, 1).Value Then
+                            If endmonth(houseid) - mnu2(icount2) = 4 And endday(houseid) - CInt(date3(icount2)) > 4 Then
+                                Range(storestore(icount2)).Interior.Color = RGB(173, 216, 230)
+                            ElseIf endmonth(houseid) - mnu2(icount2) = 5 And endday(houseid) - CInt(date3(icount2)) > -26 Then
+                                Range(storestore(icount2)).Interior.Color = RGB(173, 216, 230)
+                            ElseIf endmonth(houseid) - mnu2(icount2) > 5 Then
+                                Range(storestore(icount2)).Interior.Color = RGB(173, 216, 230)
+                            End If
+                        End If
+                        icount2 = icount2 + 1
+                    ElseIf CStr(stfreq(icount2)) = "Semi-Annually" Then
+                        If Cells(rw + 1, 1).Value <> Cells(intx, 1).Value Then
+                            If endmonth(houseid) - mnu2(icount2) = 6 And endday(houseid) - CInt(date3(icount2)) > 7 Then
+                                Range(storestore(icount2)).Interior.Color = RGB(173, 216, 230)
+                            ElseIf endmonth(houseid) - mnu2(icount2) = 7 And endday(houseid) - CInt(date3(icount2)) > -23 Then
+                                Range(storestore(icount2)).Interior.Color = RGB(173, 216, 230)
+                            ElseIf endmonth(houseid) - mnu2(icount2) > 7 Then
+                                Range(storestore(icount2)).Interior.Color = RGB(173, 216, 230)
+                            End If
+                        End If
+                        icount2 = icount2 + 1
+                    ElseIf CStr(stfreq(icount2)) = "Annually" Then
+                        If Cells(rw + 1, 1).Value <> Cells(intx, 1).Value Then
+                            If endmonth(houseid) - mnu2(icount2) = 12 And endday(houseid) - CInt(date3(icount2)) > 10 Then
+                                Range(storestore(icount2)).Interior.Color = RGB(173, 216, 230)
+                            ElseIf endmonth(houseid) - mnu2(icount2) = 13 And endday(houseid) - CInt(date3(icount2)) > -20 Then
+                                Range(storestore(icount2)).Interior.Color = RGB(173, 216, 230)
+                            ElseIf endmonth(houseid) - mnu2(icount2) > 13 Then
+                                Range(storestore(icount2)).Interior.Color = RGB(173, 216, 230)
+                            End If
+                        End If
+                        icount2 = icount2 + 1
+                    'First condition if a provider started from the first month of a household's records
+                    ElseIf mnu1(icount2) = 1 Then
+                        'Condition for if a certain provider appeared less than months passed
+                        If countnum(icount2) < comonth Then
+                            'If a certain provider only appeared once, then it would just stay white in second column
+                            If countnum(icount2) = 1 Then
+                                Range(storestore(icount2)).Interior.Color = RGB(255, 255, 255)
+                            'If end date entered is January and beginning date entered is December
+                            ElseIf CInt(arrE(0)) = 1 And CInt(date2(icount2)) = 12 And CInt(arrE(2)) - CInt(date4(icount2)) = 1 Then
+                                If CInt(arrE(1)) - CInt(date3(icount2)) < (stday(icount2) - 30) - 3 Then
+                                    If Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144) Then
+                                        Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144)
+                                    Else
+                                        Range(storestore(icount2)).Interior.Color = RGB(255, 255, 255)
+                                    End If
+                                ElseIf CInt(arrE(1)) - CInt(date3(icount2)) > (stday(icount2) - 30) + 3 Then
+                                    Range(storestore(icount2)).Interior.Color = RGB(173, 216, 230)
+                                ElseIf CInt(arrE(1)) - CInt(date3(icount2)) > (stday(icount2) - 30) - 3 And CInt(arrE(1)) - CInt(date3(icount2)) < (stday(icount2) - 30) + 3 Then
+                                    Range(storestore(icount2)).Interior.Color = RGB(255, 255, 255)
+                                End If
+                            'If the end month minus the stored month of a certain provider = 1, and the
+                            'difference in days (not including the month) is < -3, and the year is the same,
+                            'result: should highlight white, unless there's a green highlight there.
+                            ElseIf CInt(arrE(0)) - CInt(date2(icount2)) = 1 And CInt(arrE(1)) - CInt(date3(icount2)) < (stday(icount2) - 30) - 3 And CInt(arrE(2)) = CInt(date4(icount2)) Then
+                                If Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144) Then
+                                    Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144)
+                                Else
+                                    Range(storestore(icount2)).Interior.Color = RGB(255, 255, 255)
+                                End If
+                            'If the end month minus the stored month of a certain provider = 1, and the
+                            'difference in days (not including the month) is > 3, and the year is the same,
+                            'result: should highlight white, unless there's a green highlight there.
+                            'NOTE: if difference in days is > -3, but < 3, then no highlight will automatically show up.
+                            ElseIf CInt(arrE(0)) - CInt(date2(icount2)) = 1 And CInt(arrE(1)) - CInt(date3(icount2)) > (stday(icount2) - 30) + 3 And CInt(arrE(2)) = CInt(date4(icount2)) Then
+                                Range(storestore(icount2)).Interior.Color = RGB(173, 216, 230)
+                            'NOTE: If difference in days is > -3, but < 3, then no highlight will automatically show up.
+                            ElseIf CInt(arrE(0)) - CInt(date2(icount2)) = 1 And CInt(arrE(1)) - CInt(date3(icount2)) > (stday(icount2) - 30) - 3 And CInt(arrE(1)) - CInt(date3(icount2)) < (stday(icount2) - 30) + 3 And CInt(arrE(2)) = CInt(date4(icount2)) Then
+                                Range(storestore(icount2)).Interior.Color = RGB(255, 255, 255)
+                            '2-month end date conditions
+                            ElseIf CInt(arrE(0)) = 1 And CInt(date2(icount2)) = 11 And CInt(arrE(1)) - CInt(date3(icount2)) <= (stday(icount2) - 30) - 27 And CInt(arrE(2)) - CInt(date4(icount2)) = 1 Then
+                                If Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144) Then
+                                    Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144)
+                                Else
+                                Range(storestore(icount2)).Interior.Color = RGB(255, 255, 255)
+                                End If
+                            ElseIf CInt(arrE(0)) = 2 And CInt(date2(icount2)) = 12 And CInt(arrE(1)) - CInt(date3(icount2)) <= (stday(icount2) - 30) - 27 And CInt(arrE(2)) - CInt(date4(icount2)) = 1 Then
+                                If Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144) Then
+                                    Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144)
+                                Else
+                                Range(storestore(icount2)).Interior.Color = RGB(255, 255, 255)
+                                End If
+                            ElseIf CInt(arrE(0)) - CInt(date2(icount2)) = 2 And CInt(arrE(1)) - CInt(date3(icount2)) <= (stday(icount2) - 30) - 27 And CInt(arrE(2)) = CInt(date4(icount2)) Then
+                                If Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144) Then
+                                    Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144)
+                                Else
+                                Range(storestore(icount2)).Interior.Color = RGB(255, 255, 255)
+                                End If
+                            'For Any other condition - like if two month distance and end day - stored day > -27
+                            ElseIf CInt(arrE(0)) = CInt(date2(icount2)) Then
+                                'NOTHING!!!
+                            Else
+                                Range(storestore(icount2)).Interior.Color = RGB(173, 216, 230)
+                                'Extra Reset
+                                'Collection Condition
+                                If icount2 = mnu1.Count Then
+                                    med = comonth
+                                    mnu1.Remove (icount2)
+                                    mnu1.Add med
+                                Else
+                                    med = comonth
+                                    mnu1.Remove (icount2)
+                                    mnu1.Add med, Before:=icount2
+                                End If
+                                '........
+                                If icount2 = countnum.Count Then
+                                    med = 1
+                                    countnum.Remove (icount2)
+                                    countnum.Add med
+                                Else
+                                    med = 1
+                                    countnum.Remove (icount2)
+                                    countnum.Add med, Before:=icount2
+                                End If
+                                '...
+                            End If
+                        'If providers are appearing as they should, then no highlight is needed.
+                        Else
+                            If countnum(icount2) = 1 Then
+                                Range(storestore(icount2)).Interior.Color = RGB(255, 255, 255)
+                            End If
+                        End If
+                        icount2 = icount2 + 1
+                    Else
+                        'If a provider for a household started any month after the first recorded month.
+                        If countnum(icount2) < comonth - (mnu1(icount2) - 1) Then
+                            'Same conditions for all below as the one above for if a provider started at the first month.
+                            If countnum(icount2) = 1 Then
+                                Range(storestore(icount2)).Interior.Color = RGB(255, 255, 255)
+                            ElseIf CInt(arrE(0)) = 1 And CInt(date2(icount2)) = 12 And CInt(arrE(2)) - CInt(date4(icount2)) = 1 Then
+                                If CInt(arrE(1)) - CInt(date3(icount2)) < (stday(icount2) - 30) - 3 Then
+                                    If Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144) Then
+                                        Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144)
+                                    Else
+                                        Range(storestore(icount2)).Interior.Color = RGB(255, 255, 255)
+                                    End If
+                                ElseIf CInt(arrE(1)) - CInt(date3(icount2)) > (stday(icount2) - 30) + 3 Then
+                                    Range(storestore(icount2)).Interior.Color = RGB(173, 216, 230)
+                                ElseIf CInt(arrE(1)) - CInt(date3(icount2)) > (stday(icount2) - 30) - 3 And CInt(arrE(1)) - CInt(date3(icount2)) < (stday(icount2) - 30) + 3 Then
+                                    Range(storestore(icount2)).Interior.Color = RGB(255, 255, 255)
+                                End If
+                            ElseIf CInt(arrE(0)) - CInt(date2(icount2)) = 1 And CInt(arrE(1)) - CInt(date3(icount2)) < (stday(icount2) - 30) - 3 And CInt(arrE(2)) = CInt(date4(icount2)) Then
+                                If Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144) Then
+                                    Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144)
+                                Else
+                                    Range(storestore(icount2)).Interior.Color = RGB(255, 255, 255)
+                                End If
+                            ElseIf CInt(arrE(0)) - CInt(date2(icount2)) = 1 And CInt(arrE(1)) - CInt(date3(icount2)) > (stday(icount2) - 30) + 3 And CInt(arrE(2)) = CInt(date4(icount2)) Then
+                                Range(storestore(icount2)).Interior.Color = RGB(173, 216, 230)
+                            '2-month end date conditions
+                            ElseIf CInt(arrE(0)) = 1 And CInt(date2(icount2)) = 11 And CInt(arrE(1)) - CInt(date3(icount2)) <= (stday(icount2) - 30) - 27 And CInt(arrE(2)) - CInt(date4(icount2)) = 1 Then
+                                If Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144) Then
+                                    Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144)
+                                Else
+                                Range(storestore(icount2)).Interior.Color = RGB(255, 255, 255)
+                                End If
+                            ElseIf CInt(arrE(0)) = 2 And CInt(date2(icount2)) = 12 And CInt(arrE(1)) - CInt(date3(icount2)) <= (stday(icount2) - 30) - 27 And CInt(arrE(2)) - CInt(date4(icount2)) = 1 Then
+                                If Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144) Then
+                                    Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144)
+                                Else
+                                Range(storestore(icount2)).Interior.Color = RGB(255, 255, 255)
+                                End If
+                            ElseIf CInt(arrE(0)) - CInt(date2(icount2)) = 2 And CInt(arrE(1)) - CInt(date3(icount2)) <= (stday(icount2) - 30) - 27 And CInt(arrE(2)) = CInt(date4(icount2)) Then
+                                If Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144) Then
+                                    Range(storestore(icount2)).Interior.Color = RGB(144, 238, 144)
+                                Else
+                                Range(storestore(icount2)).Interior.Color = RGB(255, 255, 255)
+                                End If
+                            ElseIf CInt(arrE(0)) = CInt(date2(icount2)) Then
+                                'NOTHING!!!
+                            Else
+                                Range(storestore(icount2)).Interior.Color = RGB(173, 216, 230)
+                                'Extra Reset
+                                'Collection Condition
+                                If icount2 = mnu1.Count Then
+                                    med = comonth
+                                    mnu1.Remove (icount2)
+                                    mnu1.Add med
+                                Else
+                                    med = comonth
+                                    mnu1.Remove (icount2)
+                                    mnu1.Add med, Before:=icount2
+                                End If
+                                '........
+                                If icount2 = countnum.Count Then
+                                    med = 1
+                                    countnum.Remove (icount2)
+                                    countnum.Add med
+                                Else
+                                    med = 1
+                                    countnum.Remove (icount2)
+                                    countnum.Add med, Before:=icount2
+                                End If
+                                '...
+                            End If
+                            '...
+                        Else
+                            If countnum(icount2) = 1 Then
+                                Range(storestore(icount2)).Interior.Color = RGB(255, 255, 255)
+                            End If
+                        End If
+                        icount2 = icount2 + 1
+                    End If
+                Loop
+                icount2 = 1
+                cc1 = rw + 1
+            End If
+            '...
+    icount = 1
+    rw = rw + 1
+    str = "C" + CStr(rw) + ":C" + CStr(rw)
+    amt1 = "F" + CStr(rw) + ":F" + CStr(rw)
+    Loop
+    
+    ''''
+    
+    '''''
+'Clearing the collections before it's used for the next household ID
+Set countnum = New Collection
+Set storestore = New Collection
+Set mnu1 = New Collection
+Set mnu2 = New Collection
+Set date2 = New Collection
+Set date3 = New Collection
+Set date4 = New Collection
+Set wordz = New Collection
+Set valz = New Collection
+Set stfreq = New Collection
+Set stday = New Collection
+houseid = houseid + 1
+'Reset comonth (month counting variable) to 0 before starting again for the next household
+comonth = 0
+'Set reference variables (cc1 and intx) to rw value to be the reference for the next household id
+cc1 = rw
+intx = rw
+Loop
+
+
+
+'Highlight on selected!!!
+'rw5 is a variable that goes down the rows
+Dim rw5 As Long
+rw5 = 2
+'storelet is a string variable for the range highlights
+Dim storelet As String
+storelet = "C" + CStr(rw5) + ":C" + CStr(rw5)
+'amt1 is the same string variable from above for the range highlights
+amt1 = "F" + CStr(rw5) + ":F" + CStr(rw5)
+'arrT is a String array that stores the split date in a certain cell.
+'ex: date in a cell is 05/03/2023
+'After Split Function:
+'arrT(0) = "05"
+'arrT(1) = "03"
+'arrT(2) = "2023"
+Dim arrT() As String
+
+'General code checkup
+'Do while loop that ensures that the red and green only show up within the date range, and the blue highlight
+'shows up to two months before the beginning date
+Do While CStr(Cells(rw5, 3).Value) <> “”
+    'goes through one date cell at a time - row 3, NOT by Household.
+    arrT = Split(CStr(Cells(rw5, 2)), "/")
+    '...
+    'If Statement for the blue highlights
+    If Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(173, 216, 230) Then
+        If CInt(arrB(0)) - CInt(arrT(0)) = 2 And CInt(arrB(1)) - CInt(arrT(1)) > 0 And CInt(arrB(2)) = CInt(arrT(2)) Then
+            Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(255, 255, 255)
+        ElseIf CInt(arrB(0)) - CInt(arrT(0)) > 2 And CInt(arrB(2)) = CInt(arrT(2)) Then
+            Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(255, 255, 255)
+        ElseIf CInt(arrB(0)) = 1 And CInt(arrT(0)) = 11 And CInt(arrB(1)) - CInt(arrT(1)) > 0 Then
+            Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(255, 255, 255)
+        ElseIf CInt(arrB(0)) = 2 And CInt(arrT(0)) = 12 And CInt(arrB(1)) - CInt(arrT(1)) > 0 Then
+            Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(255, 255, 255)
+        ElseIf CInt(arrB(0)) = 1 And CInt(arrT(0)) < 11 And CInt(arrB(2)) - CInt(arrT(2)) = 1 Then
+            Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(255, 255, 255)
+        ElseIf CInt(arrB(0)) = 2 And CInt(arrT(0)) < 12 And CInt(arrB(2)) - CInt(arrT(2)) = 1 Then
+            Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(255, 255, 255)
+        End If
+    End If
+    '...
+    '...
+    '...
+    'For the red and green Highlights
+    If CInt(arrT(2)) >= CInt(arrB(2)) Then
+        'This If-Statement adddresses if there's a change in the year during the date period.
+        If CInt(arrE(2)) - CInt(arrB(2)) > 0 Then
+            If CInt(arrT(0)) >= CInt(arrB(0)) Or CInt(arrT(0)) <= CInt(arrE(0)) Then
+                If CInt(arrT(0)) = CInt(arrB(0)) And CInt(arrT(1)) >= CInt(arrB(1)) Then
+                    Erase arrT()
+                ElseIf CInt(arrT(0)) <> CInt(arrB(0)) And CInt(arrT(0)) <> CInt(arrE(0)) Then
+                    Erase arrT()
+                ElseIf CInt(arrT(0)) = CInt(arrE(0)) And CInt(arrT(1)) <= CInt(arrE(1)) Then
+                    Erase arrT()
+                'for days in the month that are before the beginning date, or after the end date
+                Else
+                    Erase arrT()
+                    '...
+                    If Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(144, 238, 144) Then
+                        Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(255, 255, 255)
+                    End If
+                    Range(storelet).Interior.Color = RGB(255, 255, 255)
+                    Range(amt1).Interior.Color = RGB(255, 255, 255)
+                    Cells(rw5, 8).Value = ""
+                End If
+            Else
+                Erase arrT()
+                '...
+                If Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(144, 238, 144) Then
+                    Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(255, 255, 255)
+                End If
+                Range(storelet).Interior.Color = RGB(255, 255, 255)
+                Range(amt1).Interior.Color = RGB(255, 255, 255)
+                Cells(rw5, 8).Value = ""
+            End If
+        'If statement for during the same year range of begining and end dates
+        ElseIf CInt(arrT(0)) >= CInt(arrB(0)) And CInt(arrT(0)) <= CInt(arrE(0)) Then
+            If CInt(arrT(0)) = CInt(arrB(0)) And CInt(arrT(1)) >= CInt(arrB(1)) Then
+                If CInt(arrT(0)) = CInt(arrE(0)) And CInt(arrT(1)) <= CInt(arrE(1)) Then
+                    Erase arrT()
+                ElseIf CInt(arrT(0)) = CInt(arrE(0)) And CInt(arrT(1)) > CInt(arrE(1)) Then
+                    Erase arrT()
+                    '...
+                    If Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(144, 238, 144) Then
+                        Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(255, 255, 255)
+                    End If
+                    Range(storelet).Interior.Color = RGB(255, 255, 255)
+                    Range(amt1).Interior.Color = RGB(255, 255, 255)
+                    Cells(rw5, 8).Value = ""
+                End If
+                Erase arrT()
+            ElseIf CInt(arrT(0)) <> CInt(arrB(0)) And CInt(arrT(0)) <> CInt(arrE(0)) Then
+                Erase arrT()
+            ElseIf CInt(arrT(0)) = CInt(arrE(0)) And CInt(arrT(1)) <= CInt(arrE(1)) Then
+                Erase arrT()
+            Else
+                Erase arrT()
+                '...
+                If Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(144, 238, 144) Then
+                    Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(255, 255, 255)
+                End If
+                Range(storelet).Interior.Color = RGB(255, 255, 255)
+                Range(amt1).Interior.Color = RGB(255, 255, 255)
+                Cells(rw5, 8).Value = ""
+            End If
+        'This else is incase there's date points that happen on a month earlier than the month of the
+        'beginning range;  result: would automatically be turned white.
+        Else
+            Erase arrT()
+            '...
+            If Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(144, 238, 144) Then
+                Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(255, 255, 255)
+            End If
+            Range(storelet).Interior.Color = RGB(255, 255, 255)
+            Range(amt1).Interior.Color = RGB(255, 255, 255)
+            Cells(rw5, 8).Value = ""
+        End If
+    'This else is incase there's date points that span years earlier, even charges from years before the
+    'beginning range;  result: would automatically be turned white.
+    Else
+        Erase arrT()
+        '...
+        If Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(144, 238, 144) Then
+            Range("B" + CStr(rw5) + ":B" + CStr(rw5)).Interior.Color = RGB(255, 255, 255)
+        End If
+        Range(storelet).Interior.Color = RGB(255, 255, 255)
+        Range(amt1).Interior.Color = RGB(255, 255, 255)
+        Cells(rw5, 8).Value = ""
+    End If
+    'Always Erase arrT to make room for th next date points as we go down row by row.
+    Erase arrT()
+    'Updating our main parameters
+    rw5 = rw5 + 1
+    storelet = "C" + CStr(rw5) + ":C" + CStr(rw5)
+    amt1 = "F" + CStr(rw5) + ":F" + CStr(rw5)
+Loop
+
+
+'check1 is a variable to go down the rows
+Dim check1 As Long
+check1 = 2
+'area1, area2, and amt1 are variables to put into the Range code to highlight one certain cell at a time.
+Dim area1 As String
+area1 = "B" + CStr(check1) + ":B" + CStr(check1)
+Dim area2 As String
+area2 = "C" + CStr(check1) + ":C" + CStr(check1)
+Dim area3 As String
+area3 = "E" + CStr(check1) + ":E" + CStr(check1)
+amt1 = "F" + CStr(check1) + ":F" + CStr(check1)
+
+'Exceptions to take off highlights [Certain Case Scenarios]
+    Do While CStr(Cells(check1, 1)) <> ""
+        If CStr(Cells(check1, 3)) = "CAPITAL ONE AUTOPAY PYMT" Then
+            Range(area1).Interior.Color = RGB(255, 255, 255)
+            Range(area2).Interior.Color = RGB(255, 255, 255)
+            Range(area3).Interior.Color = RGB(255, 255, 255)
+            Range(amt1).Interior.Color = RGB(255, 255, 255)
+            Cells(check1, 8).Value = ""
+        ElseIf CStr(Cells(check1, 3)) = "ACH SETTLEMENT OFFSET" Then
+            Range(area1).Interior.Color = RGB(255, 255, 255)
+            Range(area2).Interior.Color = RGB(255, 255, 255)
+            Range(area3).Interior.Color = RGB(255, 255, 255)
+            Range(amt1).Interior.Color = RGB(255, 255, 255)
+            Cells(check1, 8).Value = ""
+        End If
+        check1 = check1 + 1
+        area1 = "B" + CStr(check1) + ":B" + CStr(check1)
+        area2 = "C" + CStr(check1) + ":C" + CStr(check1)
+        area3 = "E" + CStr(check1) + ":E" + CStr(check1)
+        amt1 = "F" + CStr(check1) + ":F" + CStr(check1)
+    Loop
+'...................
+
+'num1 is a variable to go down the rows
+Dim num1 As Long
+num1 = 2
+'This loop runs through all rows, and checks if the ID is "SS", then the Savings Colum will automatically = 0
+Do While CStr(Cells(num1, 1).Value) <> ""
+    If CStr(Cells(num1, 1).Value) = "SS" Then
+        Cells(num1, 6).Value = 0
+    End If
+    num1 = num1 + 1
+Loop
+'
+
+'variable stirngz is to store existing cell data to add more to it.
+Dim stringz As String
+stringz = ""
+rw = 2
+
+'this function is to check for blue, green, and orange highlights, and to add descriptions based on the current sitation.
+
+Do While CStr(Cells(rw, 1).Value) <> "SS"
+    If Range("B" + CStr(rw) + ":B" + CStr(rw)).Interior.Color = RGB(144, 238, 144) Then
+        If Cells(rw, 8).Value = "" Then
+            Cells(rw, 8).Value = "Duplicate"
+        Else
+            stringz = Cells(rw, 8).Value + ", Duplicate"
+            Cells(rw, 8).Value = stringz
+        End If
+    End If
+    If Range("B" + CStr(rw) + ":B" + CStr(rw)).Interior.Color = RGB(173, 216, 230) Then
+        If Cells(rw, 8).Value = "" Then
+            Cells(rw, 8).Value = "Not appearing on time"
+        Else
+            stringz = Cells(rw, 8).Value + ", Not appearing on time"
+            Cells(rw, 8).Value = stringz
+        End If
+    End If
+    If Range("F" + CStr(rw) + ":F" + CStr(rw)).Interior.Color = RGB(255, 165, 0) Then
+        If Cells(rw, 8).Value = "" Then
+            Cells(rw, 8).Value = "Fixed"
+        Else
+            stringz = Cells(rw, 8).Value + ", Fixed"
+            Cells(rw, 8).Value = stringz
+        End If
+    End If
+    rw = rw + 1
+Loop
+
+
+End Sub

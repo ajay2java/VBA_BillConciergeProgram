@@ -9,7 +9,7 @@ This is the Code that organizes all the transactions (over the period of the ent
  
  ii. Certain Provider charges that appear more often than they are supposed to. (day range varies from provider to provider - code refers to a key with the specific cases)
  
- iii. Charges from a certain provider that don&#39;t appear for a while (e.g., after 2 or more months)
+ iii. Certain provider charges that don&#39;t appear for a while (e.g., after 2 or more months)
  
  iv. Certain Provider charge amounts that are out of range from the referred excel sheet with the bill key.
  

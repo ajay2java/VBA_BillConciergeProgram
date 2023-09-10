@@ -10,7 +10,7 @@ Sub RunCode()
 '2. Provider charges that appear more often than they are supposed to. (day range varies from provider to provider - code refers to a key with the specific cases)
 '3. Certain provider charges that don't appear for a while (e.g., after 2 or more months)
 '4. Cetain provider charge amounts that are out of range from the referred excel sheet with the bill key.
-'5. Fixed Payment charges that changes from the previous payment to current payment (changes by 1 cent or more).
+'5. Fixed Payment charges that change from the previous payment to current payment (changes by 1 cent or more).
 
 'storebeg & storeend are string variables that store the start and end date
 Dim storebeg As String
